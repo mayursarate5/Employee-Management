@@ -61,25 +61,47 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadEmployees() {
         employeesRef.on('value', (snapshot) => {
             const data = snapshot.val();
-            employees = data ? Object.values(data) : [];
+            if (data) {
+                // Convert Firebase object to array while preserving keys
+                employees = Object.entries(data).map(([key, value]) => {
+                    return { ...value, id: key };
+                });
+            } else {
+                employees = [];
+            }
             renderEmployeeTable();
+        }, (error) => {
+            console.error("Error loading employees:", error);
+            alert("Failed to load employees. See console for details.");
         });
     }
     
     function saveEmployee(employee) {
         if (currentEmployeeId) {
-            // Update existing employee
+            // Update existing employee using Firebase's key
             employeesRef.child(currentEmployeeId).update(employee);
         } else {
-            // Add new employee
+            // Add new employee - let Firebase generate the key
             const newRef = employeesRef.push();
+            // Use Firebase's key as the ID
+            employee.id = newRef.key;
             newRef.set(employee);
         }
     }
     
     function deleteEmployee() {
+        if (!employeeToDelete) return;
+        
+        // Remove from Firebase
         employeesRef.child(employeeToDelete).remove()
-            .then(() => closeConfirmModal());
+            .then(() => {
+                console.log("Employee deleted successfully");
+                closeConfirmModal();
+            })
+            .catch(error => {
+                console.error("Error deleting employee:", error);
+                alert("Failed to delete employee. See console for details.");
+            });
     }
     
     // UI Functions
@@ -105,10 +127,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td>${employee.position}</td>
                 <td>$${employee.salary ? employee.salary.toLocaleString() : '0'}</td>
                 <td class="actions">
-                    <button class="action-btn edit-btn" data-id="${employee.id || employee.key}">
+                    <button class="action-btn edit-btn" data-key="${employee.id}">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button class="action-btn delete-btn" data-id="${employee.id || employee.key}">
+                    <button class="action-btn delete-btn" data-key="${employee.id}">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </td>
@@ -116,17 +138,18 @@ document.addEventListener('DOMContentLoaded', function() {
             employeeTableBody.appendChild(row);
         });
         
+        // Update event listeners to use data-key instead of data-id
         document.querySelectorAll('.edit-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const id = this.getAttribute('data-id');
-                openEditEmployeeModal(id);
+                const key = this.getAttribute('data-key');
+                openEditEmployeeModal(key);
             });
         });
         
         document.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', function() {
-                const id = this.getAttribute('data-id');
-                openConfirmModal(id);
+                const key = this.getAttribute('data-key');
+                openConfirmModal(key);
             });
         });
     }
@@ -138,10 +161,10 @@ document.addEventListener('DOMContentLoaded', function() {
         employeeModal.style.display = 'block';
     }
     
-    function openEditEmployeeModal(id) {
-        const employee = employees.find(emp => emp.id === id || emp.key === id);
+    function openEditEmployeeModal(key) {
+        const employee = employees.find(emp => emp.id === key);
         if (employee) {
-            currentEmployeeId = employee.key || id;
+            currentEmployeeId = key;
             modalTitle.textContent = 'Edit Employee';
             document.getElementById('employeeId').value = employee.id || '';
             document.getElementById('name').value = employee.name || '';
