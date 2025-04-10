@@ -91,18 +91,35 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function deleteEmployee() {
         if (!employeeToDelete) return;
-        
-        // Remove from Firebase
-        employeesRef.child(employeeToDelete).remove()
-            .then(() => {
-                console.log("Employee deleted successfully");
-                closeConfirmModal();
-            })
-            .catch(error => {
-                console.error("Error deleting employee:", error);
-                alert("Failed to delete employee. See console for details.");
-            });
+    
+        const employeeData = employees.find(emp => emp.id === employeeToDelete);
+        if (!employeeData) {
+            alert("Employee not found.");
+            return;
+        }
+    
+        // Archive employee before deletion
+        const backupRef = database.ref('deletedEmployees').push();
+        backupRef.set({
+            ...employeeData,
+            deletedAt: new Date().toISOString()
+        }).then(() => {
+            // Proceed with deletion after backup
+            employeesRef.child(employeeToDelete).remove()
+                .then(() => {
+                    console.log("Employee deleted and backed up.");
+                    closeConfirmModal();
+                })
+                .catch(error => {
+                    console.error("Delete failed:", error);
+                    alert("Failed to delete employee.");
+                });
+        }).catch(err => {
+            console.error("Backup before delete failed:", err);
+            alert("Failed to backup employee before delete.");
+        });
     }
+    
     
     // UI Functions
     function renderEmployeeTable(employeesToRender = employees) {
